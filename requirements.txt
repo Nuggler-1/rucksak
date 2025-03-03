@@ -1,0 +1,6 @@
+ccxt==3.0.75
+cryptography==40.0.2
+loguru==0.6.0
+questionary==2.1.0
+Requests==2.32.3
+web3==6.20.3
