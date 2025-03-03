@@ -4,7 +4,7 @@ import time
 import csv
 import sys
 import questionary
-from utils import error_handler, sleeping, clear_file
+from utils import error_handler, sleeping, clear_file, floor_decimal
 from constants import DEFAULT_PRIVATE_KEYS, DEFAULT_DEPOSIT_ADDRESSES, DEFAULT_PROXIES, DEFAULT_REPORT_PATH
 from config import TOKEN_LIST, USD_POSITION_SIZE, CUSTOM_POSITION_SIZE, MAX_POSITION_DIFFERENCE, RANDOMIZE, REPORT_TYPE, CLOSE_PREVIOUS_POSITIONS
 from backpack.backpack import Backpack_account
@@ -38,11 +38,12 @@ class Runner():
         amounts = []
         logger.info('Creating positions list for each wallet, it might take some time...\n')
         clear_file('memory/amounts.txt')
+        token_list = [i for i in TOKEN_LIST if '_PERP' in i]
         for private_key in self.private_keys:
 
             account = Backpack_account(private_key)
             if i%2 == 0: 
-                token = random.choice(TOKEN_LIST)
+                token = random.choice(token_list)
                 isBuy = 1
                 order_size, round_value = self._get_order_size(account, token)
             
@@ -100,6 +101,118 @@ class Runner():
         else: 
             return 1
         
+    @error_handler('selling spot tokens')
+    def _sell_spot_tokens(self,private_key:str): #готово
+
+        account = Backpack_account(private_key)
+        balances = account.get_balances()
+        tokens_to_sell = []
+
+        for token in balances.keys(): 
+
+            if token == 'USDC': 
+                continue
+
+            decimals = account.get_token_decimals(f'{token}_USDC')
+            balance = floor_decimal( float(balances[token]['available']), decimals)
+
+            if balance != 0 : 
+                tokens_to_sell.append([f'{token}_USDC', balance])
+
+        if len(tokens_to_sell) < 1: 
+            logger.info(f'{account.public_key_b64}: nothing to sell')
+            return 1
+        
+        for token in tokens_to_sell:
+
+            logger.info(f"{account.public_key_b64}: selling {token[0].split('_')[0]}")
+
+            response = account.post_limit_order(token[0], 'Ask', amount_token = token[1])
+            assert response['status'] == 'Filled', f'failed to fill sell order on {token[0]} - status {response["status"]}'
+
+            logger.success(f"{account.public_key_b64}: sell order filled {response['executedQuantity']} {response['symbol'].split('_')[0]} at {response['price']} (total: {response['executedQuoteQuantity'] } USD)")
+            if token != tokens_to_sell[-1]:
+                sleeping('action')
+        
+        return 1
+
+    @error_handler('sending spot buy order',)  
+    def  _send_spot_buy_order(self, private_key:str):
+
+        token_list = [i for i in TOKEN_LIST if '_PERP' not in i]
+        token = random.choice(token_list)
+        account = Backpack_account(private_key)
+        balance = account.get_balances('USDC')
+
+        amount_usd = 0
+        if USD_POSITION_SIZE != 0: 
+            amount_usd = random.uniform(USD_POSITION_SIZE[0], USD_POSITION_SIZE[1])
+            order_size = round(amount_usd, 2)
+            if order_size > balance: 
+                order_size = balance
+            round_value = 2
+
+        else: 
+            order_size = random.uniform(CUSTOM_POSITION_SIZE[token][0], CUSTOM_POSITION_SIZE[token][1])
+            decimals = account.get_token_decimals(token)
+            order_size = round(order_size, decimals)
+            round_value = decimals
+
+        buying_amount = f'{order_size} USD of' if USD_POSITION_SIZE!=0 else f'{order_size} '
+        logger.info(f"{account.public_key_b64}: buying {buying_amount} {token.split('_')[0]}")
+
+        if amount_usd != 0:
+            order = account.post_limit_order(token, 'Bid', amount_usd = order_size)
+        
+        else: 
+            order = account.post_limit_order(token, 'Bid', amount_token = order_size)
+
+        assert order['status'] == 'Filled', f'failed to fill buy order on {token} - status {order["status"]}'
+
+        logger.success(f"{account.public_key_b64}: buy order filled {order['executedQuantity']} {order['symbol'].split('_')[0]} at {order['price']} (total: {order['executedQuoteQuantity'] } USD)")
+        
+        return 1
+    
+    def check_spot_balances(self,):
+        for private_key in self.private_keys:
+            account = Backpack_account(private_key)
+            account.get_token_balances()
+            print()
+    
+    def open_spot_positions(self,):
+        if RANDOMIZE: 
+            random.shuffle(self.private_keys)
+        for private_key in self.private_keys:
+            self._send_spot_buy_order(private_key)
+            if private_key != self.private_keys[-1]:
+                sleeping('account')
+    
+    def close_spot_positions(self,):
+        if RANDOMIZE: 
+            random.shuffle(self.private_keys)
+        for private_key in self.private_keys:
+            self._sell_spot_tokens(private_key)
+            if private_key != self.private_keys[-1]:
+                sleeping('account')
+    
+    def volume_spot_mode(self, runs: int, delay: list[int]):
+        for _ in range(runs): 
+            self.open_spot_positions()
+
+            n = random.uniform(*delay)
+            logger.info(f'sleeping till next step: {n} seconds')
+            time.sleep(n)
+            self.close_spot_positions()
+
+            n = random.uniform(*delay)
+            logger.info(f'sleeping till next step: {n} seconds')
+            time.sleep(n)
+            print()
+            logger.info(f'Checking spot balances now')
+            self.check_spot_balances()
+        logger.info('Volume spot mode finished')
+    
+        
     def open_positions(self,): 
         self._generate_positions_amounts()
         if RANDOMIZE: 
@@ -150,14 +263,22 @@ class Runner():
             time.sleep(1)
         logger.info('Stats checked')
     
-    def volume_mode(self, runs_delay: list[int], runs: int): 
+    def volume_perp_mode(self, runs_delay: list[int], runs: int): 
         for _ in range(runs): 
             self.open_positions()
-            time.sleep(random.uniform(*runs_delay))
+
+            n = random.uniform(*runs_delay)
+            logger.info(f'sleeping till next step: {n} seconds')
+            time.sleep(n)
             self.close_positions()
-            time.sleep(random.uniform(*runs_delay))
+
+            n = random.uniform(*runs_delay)
+            logger.info(f'sleeping till next step: {n} seconds')
+            time.sleep(n)
+            logger.info(f'Checking stats now')
             self.check_stats()
-        logger.info('Volume mode finished')
+            
+        logger.info('Volume perp mode finished')
 
     def deposit_mode(self, deposit_token: str, deposit_amount: list[float]):#USDC/SOL/USDT 
         if RANDOMIZE:
@@ -192,12 +313,16 @@ class Runner():
             choice = questionary.select(
                         "Select work mode:",
                         choices=[
-                            "Open forks", 
-                            "Close all positions",
+                            "Buy spot positions", 
+                            "Sell spot postions",
+                            "Loop spot mode",
+                            "Check spot balances",
+                            "Open perp forks", 
+                            "Close all perp positions",
+                            "Loop perp mode",
                             "Deposit to Backpack",
                             #"Withdraw from Backpack",
                             "Check stats",
-                            "Loop mode",
                             "Run range of wallets", 
                             "Run specific wallets",
                             "Reset selction of wallets",
@@ -209,7 +334,28 @@ class Runner():
                     
                 match choice: 
 
-                    case "Open forks":
+                    case "Buy spot positions":
+                        self.open_spot_positions()
+
+                    case "Sell spot postions":
+                        self.close_spot_positions()
+
+                    case "Loop spot mode":
+                        min_run_delay = int(
+                            questionary.text(f'Input min run delay in seconds: ').unsafe_ask()
+                        )
+                        max_run_delay = int(
+                            questionary.text(f'Input max run delay in seconds: ').unsafe_ask()
+                        )
+                        runs = int(
+                            questionary.text(f'Input amount of runs: ').unsafe_ask()
+                        )
+                        self.volume_spot_mode(runs, [min_run_delay, max_run_delay])
+
+                    case "Check spot balances":
+                        self.check_spot_balances()
+
+                    case "Open perp forks":
                         if len(self.private_keys) %2 != 0:
                             answer = questionary.select(
                                 'Amount of wallets is not even, unbalanced positions will be opened, you sure?',
@@ -222,7 +368,7 @@ class Runner():
                                 continue
                         self.open_positions()
                     
-                    case "Close all positions":
+                    case "Close all perp positions":
                         delay = int(
                             questionary.text(f'Input start delay in seconds: ').unsafe_ask()
                         )
@@ -272,7 +418,7 @@ class Runner():
                     case "Check stats":
                         self.check_stats()
 
-                    case "Loop mode":
+                    case "Loop perp mode":
                         min_run_delay = int(
                             questionary.text(f'Input min run delay in seconds: ').unsafe_ask()
                         )

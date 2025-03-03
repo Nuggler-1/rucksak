@@ -398,7 +398,38 @@ class Backpack_account(Backpack_exchange):
                 total_balance = total_balance + balance*price
 
         return round(total_balance, 2)
-           
+
+    def get_token_balances(self,):   
+        balances = self.get_balances()
+        total_balance = 0
+        positions = []
+        for token in balances.keys(): 
+
+            if token == 'USDC': 
+                total_balance += float(balances['USDC']['available'])
+                
+                continue
+
+            decimals = self.get_token_decimals(f'{token}_USDC')
+            balance = float(balances[token]['available'])
+            floored_balance = floor_decimal(balance , decimals)
+
+            if floored_balance != 0 :
+
+                price = self.get_token_price(f'{token}_USDC')
+                time.sleep(1)
+                total_balance = total_balance + balance*price
+                
+                positions.append([token, balances[token]['available'], round(balance*price, 2)])
+
+        if len(positions) < 1: 
+            logger.info(f'{self.public_key_b64}: No token positions')
+
+        for position in positions: 
+
+            logger.info(f'{self.public_key_b64}: {position[2]} USD in {position[1]} {position[0]} ')
+
+        logger.info(f'{self.public_key_b64}: Total balance: {total_balance} USD')
 
 
-#нужен вывод 
+    #нужен вывод 
