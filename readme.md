@@ -14,6 +14,8 @@
 
 В папке `user_files` аполни файлы `private_keys.txt` и `proxies.txt` (в приватники сувать приватный апи ключ из https://backpack.exchange/portfolio/settings/api-keys )
 
+*прокси в формате user:pass@ip:port*
+
 **Не забудь добавить API-ключ от OKX в `config.py` если собираешься использовать деп**
 
 Заходишь в конфиг и смотришь все настройки, там все максимально понятно подписано.
