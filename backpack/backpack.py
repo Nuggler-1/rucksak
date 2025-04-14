@@ -67,6 +67,15 @@ class Backpack_account(Backpack_exchange):
         if proxy!=None:
             self.session.proxies.update(proxy)
 
+    
+    @staticmethod
+    def public_key(private_key:str):
+        signer = Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key))
+
+        public_key = signer.public_key().public_bytes_raw()
+        public_key_b64 = base64.b64encode(public_key).decode(encoding='utf-8')
+    
+        return public_key_b64
         
     def _sign_message_b64(self, message:str): 
 

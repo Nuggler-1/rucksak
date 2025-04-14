@@ -3,10 +3,11 @@ import random
 import time
 import csv
 import sys
+import os
 import questionary
 from utils import error_handler, sleeping, clear_file, floor_decimal
 from constants import DEFAULT_PRIVATE_KEYS, DEFAULT_DEPOSIT_ADDRESSES, DEFAULT_PROXIES, DEFAULT_REPORT_PATH
-from config import TOKEN_LIST, USD_POSITION_SIZE, CUSTOM_POSITION_SIZE, MAX_POSITION_DIFFERENCE, RANDOMIZE, REPORT_TYPE, CLOSE_PREVIOUS_POSITIONS
+from config import TOKEN_LIST, USD_POSITION_SIZE, USE_LAST_WALLETS, ACCOUNTS_PER_FORK, CUSTOM_POSITION_SIZE, MAX_POSITION_DIFFERENCE, RANDOMIZE, REPORT_TYPE, CLOSE_PREVIOUS_POSITIONS
 from backpack.backpack import Backpack_account
 from backpack.backpack_deposit import OKX
 
@@ -15,7 +16,12 @@ class Runner():
     def __init__(self,private_keys:list):
         self.private_keys = private_keys
         self.accounts = []
-        pass
+        
+    def _update_random_seed(self,):
+        seed = int.from_bytes(os.urandom(8), byteorder='big')
+        seed ^= int(time.time() * 1000)
+        seed ^= os.getpid()
+        random.seed(seed)
 
     def _get_order_size(self, account:Backpack_account, token:str): #готово
 
@@ -33,31 +39,99 @@ class Runner():
         return order_size, round_value
 
     def _generate_positions_amounts(self,): #готово 
-
-        i = 0
+        
         amounts = []
         logger.info('Creating positions list for each wallet, it might take some time...\n')
         clear_file('memory/amounts.txt')
         token_list = [i for i in TOKEN_LIST if '_PERP' in i]
-        for private_key in self.private_keys:
-
-            account = Backpack_account(private_key)
-            if i%2 == 0: 
-                token = random.choice(token_list)
-                isBuy = 1
-                order_size, round_value = self._get_order_size(account, token)
-            
-            else: 
-                isBuy = 0
-                order_size = order_size * random.uniform(1 - MAX_POSITION_DIFFERENCE/100, 1 + MAX_POSITION_DIFFERENCE/100)
-                order_size = round(order_size, round_value)
-
-            i+=1
-
-            amounts.append([private_key, isBuy, order_size, token])
         
-        for amount in amounts:
+        # Разбиваем аккаунты на группы случайного размера
+        private_keys = self.private_keys.copy()
+        while private_keys:
+            # Определяем размер текущей группы
+            if len(private_keys) < ACCOUNTS_PER_FORK[0]:
+                if USE_LAST_WALLETS and len(private_keys) > 1: 
+                    group_size = len(private_keys)
+                    private_keys = []
+                else: 
+                    logger.warning(f'Total {len(private_keys)} unused wallets left')
+                    break
+            else: 
+                group_size = min(random.randint(ACCOUNTS_PER_FORK[0], ACCOUNTS_PER_FORK[1]), len(private_keys))
+                group_keys = private_keys[:group_size]
+                private_keys = private_keys[group_size:]
+            
+            token = random.choice(token_list)
+            account = Backpack_account(group_keys[0])
 
+            total_long_size = 0
+            group_amounts = []
+            
+            long_accounts = group_keys[:group_size//2 + group_size%2]
+            short_accounts = group_keys[group_size//2 + group_size%2:]
+            
+            # Генерируем лонги
+            for key in long_accounts:
+                self._update_random_seed()
+                order_size, round_value = self._get_order_size(account, token)
+                total_long_size += order_size
+                group_amounts.append([key, 1, order_size, token])
+            
+            # Проверяем максимальный возможный объем для шортов
+            max_short_capacity = len(short_accounts) * USD_POSITION_SIZE[1]
+            if total_long_size > max_short_capacity:
+                scale_factor = max_short_capacity / total_long_size
+                total_long_size = 0
+                # Масштабируем лонги
+                for amount in group_amounts:
+                    if amount[1] == 1:  # только для лонгов
+                        amount[2] = round(amount[2] * scale_factor, round_value)
+                        total_long_size += amount[2]
+            
+            # Генерируем шорты
+            remaining_size = total_long_size
+            short_positions = []
+            for i, key in enumerate(short_accounts):
+                self._update_random_seed()
+                if i == len(short_accounts) - 1: #последняя шорт позиция с небольшой разницей 
+                    order_size = remaining_size * random.uniform(
+                        1 - MAX_POSITION_DIFFERENCE/100, 
+                        1 + MAX_POSITION_DIFFERENCE/100
+                    )
+                    if order_size > USD_POSITION_SIZE[1]: #если больше верхней границы - распределяем по остальным аккаунтам
+                        excess = order_size - USD_POSITION_SIZE[1]
+                        order_size = USD_POSITION_SIZE[1]
+                        # распределяем лишнее 
+                        for pos in short_positions:
+                            available_space = USD_POSITION_SIZE[1] - pos[2]
+                            if available_space > 0:
+                                add_size = min(excess, available_space)
+                                pos[2] = round(pos[2] + add_size, round_value)
+                                excess -= add_size
+                                if excess <= 0:
+                                    break
+                else:
+                    # Распределяем шорт позиции неравномерно
+                    size_portion = random.choice([random.uniform(0.3, 0.45), random.uniform(0.55, 0.7)])  # Макс разница 40%
+                    order_size = remaining_size * size_portion
+                    order_size = min(order_size, USD_POSITION_SIZE[1])
+                    remaining_size -= order_size
+                
+                order_size = round(order_size, round_value)
+                short_positions.append([key, 0, order_size, token])
+            
+            group_amounts.extend(short_positions)
+            amounts.extend(group_amounts)
+            
+            logger.opt(colors=True).info(f'Fork group of <c>{len(group_amounts)} wallets</c> generated')
+            logger.opt(colors=True).info(f'Total size: <m>{round(sum([i[2] for i in group_amounts]), 2)}$</m>')
+            logger.opt(colors=True).info(f'Token used: <m>{token}</m>')
+            for wallet in group_amounts:
+                logger.opt(colors=True).info(f'{Backpack_account.public_key(wallet[0])}: <c>{wallet[2]} $</c> {"<green>LONG</green>" if wallet[1] else "<red>SHORT</red>"}')
+            logger.info('')
+
+        # Записываем все позиции в файл
+        for amount in amounts:
             with open('memory/amounts.txt', "a", encoding="utf-8") as file:
                 file.write(str(amount[0]) +':'+ str(amount[1]) + ':' + str(amount[2]) + ':' + str(amount[3]) + '\n')
 
@@ -77,11 +151,16 @@ class Runner():
                 else:
                     amount_type = 'TOKEN'
                 return bool(int(position[1])), float(position[2]), str(position[3]), amount_type
+        
+        return None, None, None, None
             
     @error_handler('sending order', attempts=1)
     def _send_order(self, private_key:str): #готово
 
         isBuy, amount, token, amount_type = self._get_order_type_and_size(private_key)
+        if not token: 
+            return 0 
+
         account = Backpack_account(private_key)
         if CLOSE_PREVIOUS_POSITIONS: 
             closed = account.close_all_positions()
@@ -356,6 +435,7 @@ class Runner():
                         self.check_spot_balances()
 
                     case "Open perp forks":
+                        """
                         if len(self.private_keys) %2 != 0:
                             answer = questionary.select(
                                 'Amount of wallets is not even, unbalanced positions will be opened, you sure?',
@@ -366,6 +446,7 @@ class Runner():
                             ).unsafe_ask()
                             if answer == 'Exit':
                                 continue
+                        """
                         self.open_positions()
                     
                     case "Close all perp positions":
@@ -489,3 +570,6 @@ class Runner():
             except KeyboardInterrupt:
                 logger.info("exiting to main menu")
                 continue
+                       
+
+            
