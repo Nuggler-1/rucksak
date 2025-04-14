@@ -322,24 +322,31 @@ class Runner():
     def check_stats(self,): 
         with open(DEFAULT_REPORT_PATH, mode='w', newline='', encoding='utf-8') as file:
             pass
+        overall_balance = 0
+        overall_points = 0
         for private_key in self.private_keys:
             account = Backpack_account(private_key)
             account.get_open_positions()
-            balance = account.get_overall_balance()
+            balance, points = account.get_overall_balance()
             volume = account.get_volume()
-            logger.info(f'{account.public_key_b64}: BALANCE {balance} | VOLUME {volume}')
+            logger.opt(colors=True).info(f'{account.public_key_b64}: BALANCE <c>{balance:>5} $</c> | VOLUME <c>{volume:>8} $</c> | POINTS <m>{points:>4}</m>')
+            overall_balance += float(balance)
+            overall_points += int(points)
             with open(DEFAULT_REPORT_PATH, mode='a', newline='', encoding='utf-8') as file:
 
                 if REPORT_TYPE == 'PRIVATE': 
-                    data = [account.private_key, round(float(balance), 1), int(volume)]
+                    data = [account.private_key, round(float(balance), 1), int(volume), points]
                 elif REPORT_TYPE == 'PUBLIC': 
-                    data = [account.public_key_b64, round(float(balance), 1), int(volume)]
+                    data = [account.public_key_b64, round(float(balance), 1), int(volume), points]
                 else: 
                     raise Exception(f'unknown report mode, check REPORT_TYPE')
 
                 writer = csv.writer(file)
                 writer.writerow(data)
             time.sleep(1)
+        logger.info('')
+        logger.opt(colors=True).info(f'OVERALL BALANCE <c>{overall_balance:>6} $</c> | OVERALL POINTS <m>{overall_points:>4}</m>')
+        logger.info('')
         logger.info('Stats checked')
     
     def volume_perp_mode(self, runs_delay: list[int], runs: int): 
@@ -388,30 +395,127 @@ class Runner():
             sys.exit()
 
         while True:
-
             choice = questionary.select(
-                        "Select work mode:",
-                        choices=[
-                            "Buy spot positions", 
-                            "Sell spot postions",
-                            "Loop spot mode",
-                            "Check spot balances",
-                            "Open perp forks", 
-                            "Close all perp positions",
-                            "Loop perp mode",
-                            "Deposit to Backpack",
-                            #"Withdraw from Backpack",
-                            "Check stats",
-                            "Run range of wallets", 
-                            "Run specific wallets",
-                            "Reset selction of wallets",
-                            "Exit"
-                        ]
-                    ).ask()
+                "Select work mode:",
+                choices=[
+                    "Spot",
+                    "Perp",
+                    "Deposit to Backpack",
+                    "Run range of wallets", 
+                    "Run specific wallets",
+                    "Reset selection of wallets",
+                    "Exit"
+                ]
+            ).ask()
             
             try:
-                    
+
                 match choice: 
+
+                    case "Spot":
+                        action = questionary.select(
+                            'Select action',
+                            [
+                                "Buy spot positions", 
+                                "Sell spot postions",
+                                "Loop spot mode",
+                                "Check spot balances",
+                                "Exit"
+                            ]
+                        ).unsafe_ask()
+                        
+                    case "Perp":
+                        action = questionary.select(
+                            'Select action',
+                            [
+                                "Open perp forks", 
+                                "Close all perp positions",
+                                "Loop perp mode",
+                                #"Withdraw from Backpack",
+                                "Check stats",
+                                'Exit'
+                            ]
+                        ).unsafe_ask()
+
+                    case "Deposit to Backpack":
+                        deposit_token = questionary.select(
+                            "Select token to deposit",
+                            choices=[
+                                "USDC",
+                                "SOL",
+                                "USDT"
+                            ]
+                        ).unsafe_ask()
+                        min_deposit_amount = float(
+                            questionary.text(f'Input min deposit amount: ').unsafe_ask()
+                        )
+                        max_deposit_amount = float(
+                            questionary.text(f'Input max deposit amount: ').unsafe_ask()
+                        )
+                        self.deposit_mode(deposit_token, [min_deposit_amount, max_deposit_amount])
+                        continue
+
+                    case "Run specific wallets": 
+                        while True: 
+                            addresses = [Backpack_account(private_key).public_key_b64 for private_key in self.private_keys]
+                            choice = questionary.checkbox(
+                                "Select wallets to run:",
+                                choices=[
+                                    *addresses
+                                ]
+                            ).unsafe_ask()
+
+
+                            if len(choice) == 0: 
+                                logger.warning('Please select at least one wallet (USE SPACE TO SELECT)')
+                                continue    
+
+                            new_private_keys = []
+                            for address in choice: 
+                                index = addresses.index(address)
+                                new_private_keys.append(self.private_keys[index])
+
+                            self.private_keys = new_private_keys
+                            break
+                        continue
+
+                    case "Run range of wallets": 
+
+                        while True: 
+
+                            addresses = [Backpack_account(private_key).public_key_b64 for private_key in self.private_keys]
+                            choice = questionary.checkbox(
+                                "Select range of wallets to run (first and last):",
+                                choices=[
+                                    *addresses
+                                ]
+                            ).unsafe_ask()
+
+                            if len(choice) !=  2: 
+                                logger.warning('Please select first and last wallet in range (ONLY 2 WALLETS)')
+                                continue
+
+                            first_index = addresses.index(choice[0])
+                            last_index = addresses.index(choice[1])
+
+                            self.private_keys = self.private_keys[first_index:last_index+1]
+                            break
+                        continue
+                    
+                    case "Reset selection of wallets": 
+
+                        with open(DEFAULT_PRIVATE_KEYS, 'r', encoding='utf-8') as f: 
+                            self.private_keys = f.read().splitlines()
+                        continue
+                    
+                    case "Exit":
+                        sys.exit()
+
+                    case _:
+                        logger.warning('Invalid choice')
+                        #continue
+                    
+                match action: 
 
                     case "Buy spot positions":
                         self.open_spot_positions()
@@ -457,22 +561,6 @@ class Runner():
                             logger.info(f'Starting delay for {delay} seconds')
                         self.close_positions(delay)
                     
-                    case "Deposit to Backpack":
-                        deposit_token = questionary.select(
-                            "Select token to deposit",
-                            choices=[
-                                "USDC",
-                                "SOL",
-                                "USDT"
-                            ]
-                        ).unsafe_ask()
-                        min_deposit_amount = float(
-                            questionary.text(f'Input min deposit amount: ').unsafe_ask()
-                        )
-                        max_deposit_amount = float(
-                            questionary.text(f'Input max deposit amount: ').unsafe_ask()
-                        )
-                        self.deposit_mode(deposit_token, [min_deposit_amount, max_deposit_amount])
                     
                     case "Withdraw from Backpack":
                         withdraw_token = questionary.select(
@@ -511,59 +599,9 @@ class Runner():
                         )
                         self.volume_mode([min_run_delay, max_run_delay], runs)
 
-                    case "Run specific wallets": 
-                        while True: 
-                            addresses = [Backpack_account(private_key).public_key_b64 for private_key in self.private_keys]
-                            choice = questionary.checkbox(
-                                "Select wallets to run:",
-                                choices=[
-                                    *addresses
-                                ]
-                            ).unsafe_ask()
-
-
-                            if len(choice) == 0: 
-                                logger.warning('Please select at least one wallet (USE SPACE TO SELECT)')
-                                continue    
-
-                            new_private_keys = []
-                            for address in choice: 
-                                index = addresses.index(address)
-                                new_private_keys.append(self.private_keys[index])
-
-                            self.private_keys = new_private_keys
-                            break
-
-                    case "Run range of wallets": 
-
-                        while True: 
-
-                            addresses = [Backpack_account(private_key).public_key_b64 for private_key in self.private_keys]
-                            choice = questionary.checkbox(
-                                "Select range of wallets to run (first and last):",
-                                choices=[
-                                    *addresses
-                                ]
-                            ).unsafe_ask()
-
-                            if len(choice) !=  2: 
-                                logger.warning('Please select first and last wallet in range (ONLY 2 WALLETS)')
-                                continue
-
-                            first_index = addresses.index(choice[0])
-                            last_index = addresses.index(choice[1])
-
-                            self.private_keys = self.private_keys[first_index:last_index+1]
-                            break
-                    
-                    case "Reset selection of wallets": 
-
-                        with open(DEFAULT_PRIVATE_KEYS, 'r', encoding='utf-8') as f: 
-                            self.private_keys = f.read().splitlines()
-
                     case "Exit": 
-                        sys.exit()
-
+                        continue 
+                    
                     case _:
                         pass
 

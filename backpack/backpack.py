@@ -391,11 +391,11 @@ class Backpack_account(Backpack_exchange):
         balances = self.get_balances()
         total_balance = 0
         for token in balances.keys(): 
-
             if token == 'USDC': 
                 total_balance += float(balances['USDC']['available'])
                 continue
-
+            if token == 'POINTS':
+                continue
             decimals = self.get_token_decimals(f'{token}_USDC')
             balance = float(balances[token]['available'])
             floored_balance = floor_decimal(balance , decimals)
@@ -406,7 +406,7 @@ class Backpack_account(Backpack_exchange):
                 time.sleep(1)
                 total_balance = total_balance + balance*price
 
-        return round(total_balance, 2)
+        return round(total_balance, 2), balances['POINTS']['available'] if 'POINTS' in balances else 0
 
     def get_token_balances(self,):   
         balances = self.get_balances()
@@ -416,7 +416,8 @@ class Backpack_account(Backpack_exchange):
 
             if token == 'USDC': 
                 total_balance += float(balances['USDC']['available'])
-                
+                continue
+            if token == 'POINTS':
                 continue
 
             decimals = self.get_token_decimals(f'{token}_USDC')
