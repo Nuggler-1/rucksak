@@ -118,8 +118,8 @@ def get_proxy(private):
     n = privates.index(str(private))
     proxy = proxies[n]
     proxy = {
-        'http': f'http://{proxy}',
-        'https':f'http://{proxy}'
+        'http': f'http://{proxy}' if not proxy.startswith('http://') else proxy,
+        'https':f'http://{proxy}' if not proxy.startswith('http://') else proxy
     }
     return proxy
 
