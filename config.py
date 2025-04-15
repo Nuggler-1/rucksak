@@ -14,7 +14,12 @@ MAX_POSITION_DIFFERENCE = 3
 TOKEN_LIST = [
     'SOL_USDC', # для спота вот так
     'SOL_USDC_PERP',# для перпов вот так
-    'IO_USDC'
+    'BTC_USDC_PERP',
+    'ETH_USDC_PERP',
+    'BNB_USDC_PERP',
+    'ARB_USDC_PERP',
+    'DOGE_USDC_PERP',
+    'XRP_USDC_PERP',
 
 ] 
 
@@ -23,7 +28,9 @@ TOKEN_LIST = [
 
 #Если USD_POSITION_SIZE = 0, тогда знчения берутся из CUSTOM_POSITION_SIZE, иначе берется значение в долларах
 
-USD_POSITION_SIZE = [250,850] # = 0 ИЛИ = [A, B] | т.е. сейчас стоит 20-40$
+USD_POSITION_SIZE = [350,950] # = 0 ИЛИ = [A, B] | т.е. сейчас стоит 20-40$
+
+MAX_LEVERAGE = 20 #максимальное плечо для перпов (по умолчанию 20)
 
 CUSTOM_POSITION_SIZE = { 
     'SOL_USDC_PERP': [0.4, 0.6], #0.4 - 0.6 соланы
@@ -37,8 +44,8 @@ CLOSE_PREVIOUS_POSITIONS = True
 
 RANDOMIZE = True #перемешать порядок кошельков при открытии позиций
 
-WAITING_TIME_TILL_NEXT_ACTION = [1,4] #тайминги между действиями 
-WAITING_TIME_TILL_NEXT_ACCOUNT = [10,40] #тайминги между сменой аккаунтов
+WAITING_TIME_TILL_NEXT_ACTION = [10,40] #тайминги между действиями 
+WAITING_TIME_TILL_NEXT_ACCOUNT = [250,1250] #тайминги между сменой аккаунтов
 
 ACCOUNTS_PER_FORK = [3,5] #Количество аккаунтов в одной вилке (от, до)
 

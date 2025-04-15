@@ -98,6 +98,7 @@ class Backpack_account(Backpack_exchange):
             
             self,
             instruction_type: Literal[
+                'accountUpdate',
                 'balanceQuery', 
                 'depositAddressQuery', 
                 'depositQueryAll', 
@@ -112,7 +113,7 @@ class Backpack_account(Backpack_exchange):
                 'withdraw',
                 'withdrawalQueryAll'
             ],     
-            method: Literal['post', 'get'], 
+            method: Literal['post', 'get', 'patch'], 
             url_path:str, 
             query_data:dict = None,
             request_body:dict = None,
@@ -133,6 +134,8 @@ class Backpack_account(Backpack_exchange):
                 response = self.session.post(url, json=request_body)
             case 'get': 
                 response = self.session.get(url, json=request_body)
+            case 'patch':
+                response = self.session.patch(url, json=request_body)
             case _ :
                 raise Exception('Invalid request method')
 
@@ -146,6 +149,8 @@ class Backpack_account(Backpack_exchange):
     def _sign_query(
             self, 
             instruction_type: Literal[
+                'accountUpdate',
+                'accountQuery',
                 'balanceQuery', 
                 'depositAddressQuery', 
                 'depositQueryAll', 
@@ -190,6 +195,28 @@ class Backpack_account(Backpack_exchange):
             return balances
         else:
             return float(balances[symbol]['available'])
+        
+    def update_leverage(self,leverage:int = 20): 
+
+        url_path = 'api/v1/account'
+
+        account_data = self._query('accountQuery','get', url_path)
+        leverage_limit = int(account_data['leverageLimit'])
+        if leverage_limit == leverage:
+            return 0
+        else: 
+            query_data = {
+                "leverageLimit": str(leverage)
+            }
+            update_leverage = self._query(
+                'accountUpdate', 
+                'patch',
+                url_path,
+                query_data, 
+                query_data
+            )
+            logger.info(f'{self.public_key_b64}: Leverage updated to {leverage}x')
+            return 1
     
     def get_deposit_address(self, chain:Literal['Solana', 'Bitcoin', 'Ethereum', 'Polygon'] = 'Solana'): 
 
@@ -277,6 +304,9 @@ class Backpack_account(Backpack_exchange):
     @error_handler('opening position')
     def open_futures_pos(self, symbol:str, side: Literal['Bid', 'Ask'], amount_usd:float=0, amount_token:float=0, timeInForce: Literal['IOC', 'FOK', 'GTC'] = 'GTC', postOnly: bool = False ): 
 
+        if self.update_leverage(): 
+            time.sleep(3)
+        
         price, quantity = self._get_limit_data(symbol, amount_usd, side)
 
         url_path = 'api/v1/order'
