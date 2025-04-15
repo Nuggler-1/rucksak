@@ -39,7 +39,7 @@ class OKX():
             }
         )
 
-        logger.success(f'Deposited {deposit_token} from OKX on {deposit_address}')
+        logger.success(f'Deposited {amount} {deposit_token} from OKX on {deposit_address}')
         return 1
 
         
