@@ -48,7 +48,6 @@ class Runner():
         
         # Разбиваем аккаунты на группы случайного размера
         private_keys = self.private_keys.copy()
-        print(private_keys)
         while private_keys:
             # Определяем размер текущей группы
             if len(private_keys) < ACCOUNTS_PER_FORK[0]:
