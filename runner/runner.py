@@ -341,7 +341,7 @@ class Runner():
             account.get_open_positions()
             balance, points = account.get_overall_balance()
             volume = account.get_volume()
-            logger.opt(colors=True).info(f'{account.public_key_b64}: BALANCE <c>{balance:>5} $</c> | VOLUME <c>{volume:>8} $</c> | POINTS <m>{points:>4}</m>')
+            logger.opt(colors=True).info(f'{account.public_key_b64}: BALANCE <c>{round(balance,1):>5} $</c> | VOLUME <c>{volume:>8} $</c> | POINTS <m>{points:>4}</m>')
             overall_balance += float(balance)
             overall_points += int(points)
             with open(DEFAULT_REPORT_PATH, mode='a', newline='', encoding='utf-8') as file:
