@@ -318,6 +318,18 @@ class Runner():
                 continue
             if private_key != self.private_keys[-1]:
                 sleeping('account')
+
+    def check_open_perp_positions(self,):
+        total_profit = 0
+        total_opened_size = 0
+        for private_key in self.private_keys:
+            account = Backpack_account(private_key)
+            profit, size = account.check_all_positions()
+            total_profit += profit
+            total_opened_size += size
+        logger.info('')
+        logger.opt(colors=True).info(f'Total profit: <m>{round(total_profit,2)}</m>')
+        logger.opt(colors=True).info(f'Total opened size: <m>{round(total_opened_size,2)}</m>')
                 
     def check_stats(self,): 
         with open(DEFAULT_REPORT_PATH, mode='w', newline='', encoding='utf-8') as file:
@@ -432,6 +444,7 @@ class Runner():
                                 "Close all perp positions",
                                 "Loop perp mode",
                                 #"Withdraw from Backpack",
+                                "Check open perp positions",
                                 "Check stats",
                                 'Exit'
                             ]
@@ -552,6 +565,9 @@ class Runner():
                                 continue
                         """
                         self.open_positions()
+
+                    case "Check open perp positions":
+                        self.check_open_perp_positions()
                     
                     case "Close all perp positions":
                         delay = int(
