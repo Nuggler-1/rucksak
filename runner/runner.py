@@ -41,17 +41,20 @@ class Runner():
     def _generate_positions_amounts(self,): #готово 
         
         amounts = []
-        logger.info('Creating positions list for each wallet, it might take some time...\n')
+        logger.info('Creating positions list for each wallet, it might take some time...')
+        logger.info('')
         clear_file('memory/amounts.txt')
         token_list = [i for i in TOKEN_LIST if '_PERP' in i]
         
         # Разбиваем аккаунты на группы случайного размера
         private_keys = self.private_keys.copy()
+        print(private_keys)
         while private_keys:
             # Определяем размер текущей группы
             if len(private_keys) < ACCOUNTS_PER_FORK[0]:
                 if USE_LAST_WALLETS and len(private_keys) > 1: 
                     group_size = len(private_keys)
+                    group_keys = private_keys
                     private_keys = []
                 else: 
                     logger.warning(f'Total {len(private_keys)} unused wallets left')
