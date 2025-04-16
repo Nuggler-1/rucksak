@@ -416,7 +416,7 @@ class Backpack_account(Backpack_exchange):
             pos_size = round(float(position['netCost']), 2)
             pos_profit = round(float(position['pnlRealized']),2)
             side = 'Bid' if pos_size > 0 else 'Ask'
-            logger.opt(colors=True).info(f'{self.public_key_b64}: {f"<green>+{pos_profit:>5} $</green>" if pos_profit>0 else f"<red>-{abs(pos_profit):>5} $</red>" } | {position["symbol"]} {"<green>LONG </green>" if side == "Bid" else "<red>SHORT</red>"} position | size: <c>{abs(pos_size)} $ </c>')
+            logger.opt(colors=True).info(f'{self.public_key_b64}: {f"<green>+{pos_profit:>6} $</green>" if pos_profit>0 else f"<red>-{abs(pos_profit):>5} $</red>" } | {position["symbol"]:<14} {"<green>LONG </green>" if side == "Bid" else "<red>SHORT</red>"} position | size: <c>{abs(pos_size)} $ </c>')
             total_profit += pos_profit
             total_size += abs(pos_size)
         
