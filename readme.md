@@ -64,3 +64,8 @@
 Личка: https://t.me/fttavk
 
 Telegram channel: https://t.me/fttavksoft
+
+### Отблагодарить
+
+EVM - 0xdc1600b5e11d650c82aff78bac26ac6613835e05
+SOL - 8atwS6EX9fMMEF9nSRNcJZFwDGJpyvbUwqW8kqnTo1TP
