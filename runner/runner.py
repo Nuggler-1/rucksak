@@ -572,12 +572,12 @@ class Runner():
                         self.check_open_perp_positions()
                     
                     case "Close all perp positions":
-                        delay = int(
+                        delay = str(
                             questionary.text(f'Input start delay in seconds: ').unsafe_ask()
                         )
-                        if delay:
+                        if len(delay)> 0:
                             logger.info(f'Starting delay for {delay} seconds')
-                        self.close_positions(delay)
+                            self.close_positions(int(delay))
                     
                     
                     case "Withdraw from Backpack":
