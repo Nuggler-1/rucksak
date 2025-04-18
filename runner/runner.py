@@ -577,7 +577,9 @@ class Runner():
                         )
                         if len(delay)> 0:
                             logger.info(f'Starting delay for {delay} seconds')
-                            self.close_positions(int(delay))
+                        else: 
+                            delay = 0
+                        self.close_positions(int(delay))
                     
                     
                     case "Withdraw from Backpack":
